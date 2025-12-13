@@ -1111,7 +1111,7 @@ const CryptoChart = ({
               left: `${((hoverPoint.x - pad) / (width - pad * 2)) * 100}%`,
 
 
-              top: -6,
+              top: `${Math.max(4, hoverPoint.y - 90)}px`,
 
 
               transform: 'translateX(-50%)',
@@ -3340,5 +3340,4 @@ const App = () => {
 
 
 export default App;
-
 
