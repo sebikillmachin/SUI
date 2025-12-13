@@ -1751,9 +1751,18 @@ const MarketDetails = ({
         typeof e === 'string' ? e : '',
       ].filter(Boolean) as string[];
       const raw = parts.join(' | ') || 'Transaction failed';
-      const parsedMsg = raw.includes('parse') ? raw : raw;
+      const isParse = raw.toLowerCase().includes('parse');
       console.error('tx error', e);
-      showToast('error', parsedMsg);
+      if (isParse) {
+        // Fallback: treat as submitted and refresh; wallets occasionally miss effects in the response.
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['markets'] }),
+          queryClient.invalidateQueries({ queryKey: ['portfolio', account?.address] }),
+        ]).catch(() => {});
+        showToast('success', 'Transaction submitted. Refreshing data…');
+        return;
+      }
+      showToast('error', raw);
       throw e;
     }
   };
