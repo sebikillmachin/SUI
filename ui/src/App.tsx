@@ -1598,13 +1598,7 @@ const MarketDetails = ({
   const onTestnet = account?.chains?.includes(expectedChain) ?? true;
 
 
-  const client = useSuiClient();
-
-
-  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction({
-    requestType: 'WaitForEffectsCert',
-    options: { showEffects: true, showEvents: true, showObjectChanges: true },
-  });
+  const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction();
 
 
   const { data: portfolio } = usePortfolio(account?.address);
@@ -1713,16 +1707,25 @@ const MarketDetails = ({
 
   const runTx = async (tx: Transaction) => {
     try {
-      await signAndExecute({
+      const res = await signAndExecute({
         transaction: tx,
         chain: expectedChain,
-        options: { showEffects: true, showEvents: true },
+        requestType: 'WaitForLocalExecution',
+        options: { showEffects: true, showEvents: true, showObjectChanges: true },
       });
+      const status = (res as any)?.effects?.status?.status ?? 'unknown';
+      if (status !== 'success') {
+        const err = (res as any)?.effects?.status?.error ?? 'Transaction failed';
+        showToast('error', err);
+        throw new Error(err);
+      }
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['markets'] }),
         queryClient.invalidateQueries({ queryKey: ['portfolio', account?.address] }),
       ]);
-      showToast('success', 'Transaction submitted');
+      const digest = (res as any)?.digest;
+      showToast('success', `Transaction submitted${digest ? ` (${digest.slice(0, 8)}…)` : ''}`);
+      return res;
     } catch (e: any) {
       const parts = [
         e?.message,
@@ -1730,17 +1733,12 @@ const MarketDetails = ({
         typeof e === 'string' ? e : '',
       ].filter(Boolean) as string[];
       const raw = parts.join(' | ') || 'Transaction failed';
-      const isParse = raw.toLowerCase().includes('parse');
       console.error('tx error', e);
-      // Always refresh cache so odds/UI update if the chain accepted the tx despite a parse error.
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['markets'] }),
         queryClient.invalidateQueries({ queryKey: ['portfolio', account?.address] }),
       ]).catch(() => {});
-      const msg = isParse
-        ? 'Wallet could not parse the response. Please retry; check Testnet + gas. (Data refetched just in case.)'
-        : raw;
-      showToast('error', msg);
+      showToast('error', raw);
       throw e;
     }
   };
@@ -3261,4 +3259,5 @@ const App = () => {
 
 
 export default App;
+
 
