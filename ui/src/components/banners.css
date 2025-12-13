@@ -1,0 +1,20 @@
+.banner {
+  padding: 12px 16px;
+  border-radius: 10px;
+  margin-bottom: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.banner.info {
+  background: linear-gradient(90deg, #0f172a, #1e293b);
+  color: #e5e7eb;
+}
+
+.banner.warning {
+  background: #431407;
+  color: #fde68a;
+  border: 1px solid #fbbf24;
+}
