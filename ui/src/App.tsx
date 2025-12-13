@@ -1753,16 +1753,15 @@ const MarketDetails = ({
       const raw = parts.join(' | ') || 'Transaction failed';
       const isParse = raw.toLowerCase().includes('parse');
       console.error('tx error', e);
-      if (isParse) {
-        // Fallback: treat as submitted and refresh; wallets occasionally miss effects in the response.
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: ['markets'] }),
-          queryClient.invalidateQueries({ queryKey: ['portfolio', account?.address] }),
-        ]).catch(() => {});
-        showToast('success', 'Transaction submitted. Refreshing data…');
-        return;
-      }
-      showToast('error', raw);
+      // Always refresh cache so odds/UI update if the chain accepted the tx despite a parse error.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['markets'] }),
+        queryClient.invalidateQueries({ queryKey: ['portfolio', account?.address] }),
+      ]).catch(() => {});
+      const msg = isParse
+        ? 'Wallet could not parse the response. Please retry; check Testnet + gas. (Data refetched just in case.)'
+        : raw;
+      showToast('error', msg);
       throw e;
     }
   };
