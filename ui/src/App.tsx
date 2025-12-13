@@ -266,6 +266,17 @@ const coinDecimals = (coinType: string) => tokens.find((t) => t.type === coinTyp
 
 const formatDate = (ms: number) => new Date(ms).toLocaleString();
 
+const parseCryptoQuestion = (question: string): { direction: 'above' | 'below'; targetUsd: number } | null => {
+  const m = question.match(/(above|below)\s+\$?([0-9][0-9,]*)(?:\s*([kKmMbB]))?/);
+  if (!m) return null;
+  const direction = m[1].toLowerCase() === 'below' ? 'below' : 'above';
+  const base = Number(m[2].replace(/,/g, ''));
+  if (!Number.isFinite(base)) return null;
+  const suffix = (m[3] ?? '').toLowerCase();
+  const mult = suffix === 'k' ? 1_000 : suffix === 'm' ? 1_000_000 : suffix === 'b' ? 1_000_000_000 : 1;
+  return { direction, targetUsd: Math.round(base * mult) };
+};
+
 
 
 
@@ -1189,7 +1200,7 @@ const CryptoPanel = ({
         {isFetching && <div className="muted">Updating price...</div>}
 
 
-        <div className="muted">Demo view only - connect real markets to place on-chain bets.</div>
+        <div className="muted">Chart is for reference. Use the Crypto Bet panel to place on-chain trades on the selected market.</div>
 
 
       </div>
@@ -1688,6 +1699,19 @@ const MarketDetails = ({
   }, [cryptoAsset]);
 
 
+  useEffect(() => {
+    if (mode !== 'crypto') return;
+    if (!market) return;
+
+    setBetDate(new Date(market.endTimeMs).toISOString().slice(0, 16));
+    const parsed = parseCryptoQuestion(market.question);
+    if (parsed) {
+      setBetDirection(parsed.direction);
+      setBetPrice(parsed.targetUsd);
+    }
+  }, [mode, market?.id]);
+
+
 
 
 
@@ -1758,8 +1782,35 @@ const MarketDetails = ({
 
   if (mode === 'crypto') {
 
+    const yesBps = priceYesBps(market.yesVault, market.noVault);
+    const noBps = priceNoBps(market.yesVault, market.noVault);
+    const yesPct = yesBps / 100;
+    const noPct = noBps / 100;
+    const sideYes = betDirection === 'above';
+    const positionsForMarket = portfolio?.positions.filter((p) => p.marketId === market.id) ?? [];
+    const sidePct = sideYes ? yesPct : noPct;
+    const feeFactor = 1 - market.feeBps / 10_000;
+    const mult = sidePct > 0 ? 100 / sidePct : 0;
+    const estPayout = betStake > 0 ? betStake * mult * feeFactor : 0;
+    const potential = estPayout > 0 ? `${estPayout.toFixed(2)} SUI` : '';
 
-    const potential = betStake > 0 ? `${(betStake * 1.9).toFixed(2)} SUI` : '';
+    const placeCryptoBet = async () => {
+      if (tradeDisabled) return;
+      if (!betStake || betStake <= 0) return;
+      const mist = toMist(betStake, coinDec);
+      const tx = sideYes
+        ? buildBuyYes(market.id, market.coinType, mist, minSlippageYes)
+        : buildBuyNo(market.id, market.coinType, mist, minSlippageNo);
+      await runTx(tx);
+    };
+
+    const claimAll = async () => {
+      if (tradeDisabled) return;
+      for (const pos of positionsForMarket) {
+        const tx = buildRedeem(market.id, pos.id, market.coinType);
+        await runTx(tx);
+      }
+    };
 
 
     return (
@@ -1773,8 +1824,7 @@ const MarketDetails = ({
 
           <h2>Crypto Bet</h2>
 
-
-          <div className="tag pending">Demo</div>
+          <div className={`tag ${market.resolved ? 'resolved' : 'pending'}`}>{market.resolved ? 'Resolved' : 'Open'}</div>
 
 
         </div>
@@ -1831,10 +1881,10 @@ const MarketDetails = ({
               <select value={betDirection} onChange={(e) => setBetDirection(e.target.value as 'above' | 'below')}>
 
 
-                <option value="above">Above target</option>
+                <option value="above">Long (above target)</option>
 
 
-                <option value="below">Below target</option>
+                <option value="below">Short (below target)</option>
 
 
               </select>
@@ -1924,10 +1974,16 @@ const MarketDetails = ({
             />
 
 
-            <button className="primary" disabled>Place demo bet</button>
+            <button
+              className="primary"
+              onClick={placeCryptoBet}
+              disabled={tradeDisabled || !betStake || betStake <= 0 || market.resolved}
+            >
+              {sideYes ? 'Place Long' : 'Place Short'}
+            </button>
 
 
-            <div className="helper">Demo-only UI. Connect a real on-chain market to submit.</div>
+            <div className="helper">Submits an on-chain trade on the selected market.</div>
 
 
           </div>
@@ -1945,7 +2001,7 @@ const MarketDetails = ({
             <div className="summary-line"><span>Asset</span><strong>{betAsset} / USD</strong></div>
 
 
-            <div className="summary-line"><span>Thesis</span><strong>{betDirection === 'above' ? 'Will be above' : 'Will be below'}</strong></div>
+            <div className="summary-line"><span>Position</span><strong>{betDirection === 'above' ? 'Long' : 'Short'}</strong></div>
 
 
             <div className="summary-line"><span>Target</span><strong>${betPrice.toLocaleString()}</strong></div>
@@ -1954,7 +2010,7 @@ const MarketDetails = ({
             <div className="summary-line">
 
 
-              <span>Expires</span>
+              <span>Ends</span>
 
 
               <strong>{betDate ? new Date(betDate).toLocaleString() : ''}</strong>
@@ -1966,8 +2022,19 @@ const MarketDetails = ({
             <div className="summary-line"><span>Stake</span><strong>{betStake || 0} SUI</strong></div>
 
 
-            <div className="summary-line"><span>Est. payout (demo)</span><strong>{potential}</strong></div>
+            <div className="summary-line"><span>Est. payout (approx.)</span><strong>{potential}</strong></div>
 
+
+            {market.resolved && (
+              <>
+                <button className="secondary" onClick={claimAll} disabled={tradeDisabled || positionsForMarket.length === 0}>
+                  Claim payout
+                </button>
+
+
+                <div className="helper">Redeems all your positions for this market.</div>
+              </>
+            )}
 
           </div>
 
@@ -3163,6 +3230,24 @@ const AppShell = () => {
 
 
   }, [markets, selected]);
+
+
+  useEffect(() => {
+    if (mode !== 'crypto') return;
+    if (!markets?.length) return;
+
+    const key = cryptoAsset.toUpperCase();
+    const matches = markets.filter((m) => m.question.toUpperCase().includes(key));
+    if (!matches.length) return;
+
+    const now = Date.now();
+    const open = matches.filter((m) => !m.resolved && now < m.endTimeMs);
+    const sorted = (open.length ? open : matches).slice().sort((a, b) => a.endTimeMs - b.endTimeMs);
+    const pick = sorted[0];
+    if (pick && pick.id !== selected) {
+      setSelected(pick.id);
+    }
+  }, [cryptoAsset, markets, mode, selected]);
 
 
 
