@@ -1076,47 +1076,20 @@ const CryptoChart = ({
 
 
           <rect
-
-
             x={pad}
-
-
             y={pad}
-
-
             width={width - pad * 2}
-
-
             height={height - pad * 2}
-
-
             fill="transparent"
-
-
             onMouseLeave={() => setHover(null)}
-
-
             onMouseMove={(e) => {
-
-
               const bounds = (e.target as SVGRectElement).getBoundingClientRect();
-
-
-              const x = e.clientX - bounds.left;
-
-
-              const percent = Math.min(1, Math.max(0, (x - pad) / (width - pad * 2)));
-
-
+              const x = e.clientX - bounds.left; // local to the hit-rect
+              const rectWidth = Math.max(1, bounds.width);
+              const percent = Math.min(1, Math.max(0, x / rectWidth));
               const idx = Math.min(points.length - 1, Math.max(0, Math.round(percent * (points.length - 1))));
-
-
               setHover(idx);
-
-
             }}
-
-
           />
 
 
@@ -3367,3 +3340,4 @@ const App = () => {
 
 
 export default App;
+
