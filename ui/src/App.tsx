@@ -245,14 +245,10 @@ const parseBig = (v: unknown): bigint => {
 
 
 const parseBalance = (b: any): bigint => {
-
-
-  if (!b) return 0n;
-
-
+  if (b === null || b === undefined) return 0n;
+  // Sui often serializes `0x2::balance::Balance<T>` as a plain u64 string.
+  if (typeof b === 'string' || typeof b === 'number' || typeof b === 'bigint') return BigInt(b);
   return parseBig(b.fields?.value ?? b.value);
-
-
 };
 
 
@@ -1259,7 +1255,7 @@ const MarketList = ({
   const { data, isLoading, error } = useMarkets();
 
 
-  const [coinFilter, setCoinFilter] = useState<string>('all');
+  const [coinFilter] = useState<string>('all');
 
 
   const isCrypto = mode === 'crypto';
@@ -1632,8 +1628,8 @@ const MarketDetails = ({
   const [resolutionOutcome, setResolutionOutcome] = useState(true);
   const [bondAmount, setBondAmount] = useState(1);
   const [pythUpdate, setPythUpdate] = useState('');
-  const [minSlippageYes, setMinSlippageYes] = useState(0);
-  const [minSlippageNo, setMinSlippageNo] = useState(0);
+  const [minSlippageYes] = useState(0);
+  const [minSlippageNo] = useState(0);
   const [betAsset, setBetAsset] = useState<'BTC' | 'ETH' | 'SOL'>(cryptoAsset);
   const [betPrice, setBetPrice] = useState(70000);
   const [betDate, setBetDate] = useState(() => {
@@ -1710,15 +1706,7 @@ const MarketDetails = ({
       const res = await signAndExecute({
         transaction: tx,
         chain: expectedChain,
-        requestType: 'WaitForLocalExecution',
-        options: { showEffects: true, showEvents: true, showObjectChanges: true },
       });
-      const status = (res as any)?.effects?.status?.status ?? 'unknown';
-      if (status !== 'success') {
-        const err = (res as any)?.effects?.status?.error ?? 'Transaction failed';
-        showToast('error', err);
-        throw new Error(err);
-      }
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['markets'] }),
         queryClient.invalidateQueries({ queryKey: ['portfolio', account?.address] }),
@@ -1727,11 +1715,7 @@ const MarketDetails = ({
       showToast('success', `Transaction submitted${digest ? ` (${digest.slice(0, 8)}…)` : ''}`);
       return res;
     } catch (e: any) {
-      const parts = [
-        e?.message,
-        (e?.cause as any)?.message,
-        typeof e === 'string' ? e : '',
-      ].filter(Boolean) as string[];
+      const parts = [e?.message, (e?.cause as any)?.message, typeof e === 'string' ? e : ''].filter(Boolean) as string[];
       const raw = parts.join(' | ') || 'Transaction failed';
       console.error('tx error', e);
       await Promise.all([
@@ -3092,6 +3076,10 @@ const AppShell = () => {
 
   const account = useCurrentAccount();
 
+  const client = useSuiClient();
+
+  const qc = useQueryClient();
+
 
   const { data: portfolio } = usePortfolio(account?.address);
 
@@ -3109,6 +3097,54 @@ const AppShell = () => {
 
 
   const selectedMarket = markets?.find((m) => m.id === selected) ?? null;
+
+  useEffect(() => {
+    // Near-real-time odds refresh for all viewers (no backend): listen to on-chain events and refetch.
+    const eventTypes = [
+      `${ids.packageId}::events::Trade`,
+      `${ids.packageId}::events::Sell`,
+      `${ids.packageId}::events::LiquidityChanged`,
+      `${ids.packageId}::events::MarketCreated`,
+    ];
+    const unsubs: Array<() => Promise<boolean>> = [];
+    let scheduled = false;
+
+    const invalidate = () => {
+      if (scheduled) return;
+      scheduled = true;
+      setTimeout(() => {
+        scheduled = false;
+        qc.invalidateQueries({ queryKey: ['markets'] });
+        if (account?.address) {
+          qc.invalidateQueries({ queryKey: ['portfolio', account.address] });
+        }
+      }, 250);
+    };
+
+    (async () => {
+      for (const eventType of eventTypes) {
+        try {
+          const unsub = await client.subscribeEvent({
+            filter: { MoveEventType: eventType },
+            onMessage: invalidate,
+          });
+          unsubs.push(unsub);
+        } catch {
+          // Subscriptions can fail on some RPCs; polling still keeps the UI up to date.
+        }
+      }
+    })();
+
+    return () => {
+      for (const unsub of unsubs) {
+        try {
+          void unsub();
+        } catch {
+          // ignore
+        }
+      }
+    };
+  }, [account?.address, client, qc]);
 
 
 
@@ -3259,5 +3295,3 @@ const App = () => {
 
 
 export default App;
-
-
