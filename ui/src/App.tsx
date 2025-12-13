@@ -1811,6 +1811,7 @@ const MarketDetails = ({
       await signAndExecute({
         transaction: tx,
         chain: expectedChain,
+        options: { showEffects: true, showEvents: true },
       });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['markets'] }),
@@ -1818,7 +1819,8 @@ const MarketDetails = ({
       ]);
       showToast('success', 'Transaction submitted');
     } catch (e: any) {
-      const msg = e?.message ?? 'Transaction failed';
+      const raw = typeof e?.message === 'string' ? e.message : `${e}`;
+      const msg = raw.includes('Could not parse effects') ? 'Wallet could not parse the response. Please retry; check network/wallet.' : raw;
       showToast('error', msg);
       throw e;
     }
@@ -3340,4 +3342,3 @@ const App = () => {
 
 
 export default App;
-
