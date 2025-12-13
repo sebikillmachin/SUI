@@ -216,4 +216,37 @@ module prediction_market::polymarket_move_tests {
         market::destroy_lp(lp_init);
         cleanup(clock_obj, admin, cfg, registry_obj, market_obj);
     }
+
+    #[test, expected_failure(abort_code = 6, location = prediction_market::config)]
+    fun test_fee_upper_bound() {
+        // fee_bps > 10_000 should abort
+        let mut ctx = tx::new_from_hint(@0xabc, 12, 0, 0, 0);
+        let _ = config::create_protocol<SUI>(10_001, 0, sui::object::id(&clock::create_for_testing(&mut ctx)), &mut ctx);
+    }
+
+    #[test, expected_failure(abort_code = 2, location = prediction_market::market)]
+    fun test_create_market_rejects_past_end() {
+        let mut sys_ctx = tx::new_from_hint(@0x0, 13, 0, 0, 0);
+        let mut clock_obj = clock::create_for_testing(&mut sys_ctx);
+        clock::set_for_testing(&mut clock_obj, 1_000);
+
+        let mut admin_ctx = tx::new_from_hint(@0x1, 14, 0, 0, 0);
+        let (admin, cfg) = config::create_protocol<SUI>(50, 100, sui::object::id(&clock_obj), &mut admin_ctx);
+        let mut registry_obj = registry::new(&mut admin_ctx);
+        let liquidity_coin = coin::mint_for_testing<SUI>(1_000, &mut admin_ctx);
+        // end time behind current clock -> abort eended
+        let _ = market::create_market<SUI>(&admin, &cfg, &mut registry_obj, &clock_obj, b"Past end".to_string(), 10, 50, liquidity_coin, &mut admin_ctx);
+    }
+
+    #[test, expected_failure(abort_code = 4, location = prediction_market::market)]
+    fun test_paused_blocks_trading() {
+        let (clock_obj, admin, mut cfg, registry_obj, mut market_obj, lp_init, _ctx) = setup(5_000);
+        let mut user_ctx = user_ctx(@0xee, 15);
+        config::pause(&admin, &mut cfg, &user_ctx);
+        let payment = mint_sui(1_000, &mut user_ctx);
+        let pos = market::buy_yes<SUI>(&mut cfg, &mut market_obj, &clock_obj, @0xee, payment, 1, &mut user_ctx);
+        market::destroy_position(pos);
+        market::destroy_lp(lp_init);
+        cleanup(clock_obj, admin, cfg, registry_obj, market_obj);
+    }
 }
