@@ -1602,29 +1602,8 @@ const MarketDetails = ({
 
 
   const { mutateAsync: signAndExecute } = useSignAndExecuteTransaction({
-
-
-    execute: async ({ bytes, signature }) =>
-
-
-      client.executeTransactionBlock({
-
-
-        transactionBlock: bytes,
-
-
-        signature,
-
-
-        options: { showEffects: true, showObjectChanges: true },
-
-
-        requestType: 'WaitForEffectsCert',
-
-
-      }),
-
-
+    requestType: 'WaitForEffectsCert',
+    options: { showEffects: true, showEvents: true, showObjectChanges: true },
   });
 
 
@@ -3282,3 +3261,4 @@ const App = () => {
 
 
 export default App;
+
