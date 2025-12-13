@@ -281,122 +281,48 @@ const useMarkets = () => {
 
 
   return useQuery<MarketInfo[]>({
-
-
     queryKey: ['markets', ids.registryId],
-
-
     queryFn: async () => {
-
-
       const reg = await client.getObject({
-
-
         id: ids.registryId,
-
-
         options: { showContent: true },
-
-
       });
-
-
       const markets: string[] = (reg.data?.content as any)?.fields?.markets ?? [];
-
-
       if (!markets.length) return [];
-
-
       const objs = await client.multiGetObjects({
-
-
         ids: markets,
-
-
         options: { showContent: true, showType: true },
-
-
       });
-
-
       return objs
-
-
         .map((obj) => {
-
-
           const content = obj.data?.content as any;
-
-
           if (!content || content.dataType !== 'moveObject') return null;
-
-
           const fields = content.fields;
-
-
           const type = (content as any)?.type as string;
-
-
           const coinType = type?.match(/<(.+)>/)?.[1] ?? '0x2::sui::SUI';
-
-
           return {
-
-
             id: obj.data?.objectId ?? '',
-
-
             question: fields.question as string,
-
-
             endTimeMs: Number(fields.end_time_ms ?? 0),
-
-
             feeBps: Number(fields.fee_bps ?? 0),
-
-
             resolved: Boolean(fields.resolved),
-
-
             outcomeYes: Boolean(fields.outcome_yes),
-
-
             yesVault: parseBalance(fields.yes_vault),
-
-
             noVault: parseBalance(fields.no_vault),
-
-
             totalYesShares: parseBig(fields.total_yes_shares),
-
-
             totalNoShares: parseBig(fields.total_no_shares),
-
-
             totalLpShares: parseBig(fields.total_lp_shares),
-
-
             hasPending: Boolean(fields.has_pending),
-
-
             coinType,
-
-
           } as MarketInfo;
-
-
         })
-
-
         .filter(Boolean) as MarketInfo[];
-
-
     },
-
-
-    staleTime: 10_000,
-
-
+    staleTime: 5_000,
+    refetchInterval: 5_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 
 
