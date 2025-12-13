@@ -1737,8 +1737,7 @@ const MarketDetails = ({
       await signAndExecute({
         transaction: tx,
         chain: expectedChain,
-        requestType: 'WaitForLocalExecution',
-        options: { showEffects: true, showEvents: true, showObjectChanges: true },
+        options: { showEffects: true, showEvents: true },
       });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['markets'] }),
@@ -1746,11 +1745,13 @@ const MarketDetails = ({
       ]);
       showToast('success', 'Transaction submitted');
     } catch (e: any) {
-      const raw = typeof e?.message === 'string' ? e.message : `${e}`;
-      const parsedMsg =
-        raw.includes('Could not parse effects') || raw.includes('parse the response')
-          ? 'Wallet could not parse the response. Retry, and ensure wallet is on Sui Testnet with enough SUI.'
-          : raw;
+      const parts = [
+        e?.message,
+        (e?.cause as any)?.message,
+        typeof e === 'string' ? e : '',
+      ].filter(Boolean) as string[];
+      const raw = parts.join(' | ') || 'Transaction failed';
+      const parsedMsg = raw.includes('parse') ? raw : raw;
       console.error('tx error', e);
       showToast('error', parsedMsg);
       throw e;
