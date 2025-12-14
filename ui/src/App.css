@@ -17,7 +17,26 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   margin-bottom: 20px;
+}
+
+.app-logo {
+  height: 44px;
+  width: auto;
+  flex: 0 0 auto;
+  object-fit: contain;
+  object-position: left center;
+  display: block;
+}
+
+.header .title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.header > :last-child {
+  flex: 0 0 auto;
 }
 
 .title {

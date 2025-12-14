@@ -22,6 +22,8 @@ import { NetworkBlocker } from './components/NetworkBlocker';
 import { TestnetBanner } from './components/TestnetBanner';
 
 
+import futurenetLogo from './assets/futurenet-sui-logo.png';
+
 import { ids, tokens } from './ids';
 
 
@@ -3261,6 +3263,8 @@ const AppShell = () => {
 
       <div className="header">
 
+
+        <img className="app-logo" src={futurenetLogo} alt="FUTURENET.SUI" />
 
         <div className="title">
 
